@@ -1,18 +1,25 @@
 package dmd.spring.properties;
 
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.OutputStream;
+import java.lang.reflect.Field;
 import java.net.URL;
-import java.util.Properties;
 
+import javax.annotation.PostConstruct;
+
+import org.apache.commons.configuration.PropertiesConfiguration;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
+import org.springframework.core.io.Resource;
 
 @Configuration
 @PropertySource("classpath:custom.properties")
 public class PropertiesCustom {
+
+	@Autowired
+	private ApplicationContext context;
 
 	@Value("${custom.name}")
 	private String name;
@@ -20,8 +27,24 @@ public class PropertiesCustom {
 	private String lastName;
 	@Value("${custom.address}")
 	private String address;
+	@Value("${custom.stringarray}")
+	private String[] stringArray;
 
 	public PropertiesCustom() {
+	}
+
+	@PostConstruct
+	private void init() {
+		System.out.println("Listando propiedades almacenadas");
+		System.out.println("name ==> " + name);
+		System.out.println("lastName ==> " + lastName);
+		System.out.println("address ==> " + address);
+		System.out.print("stringArray ==> [");
+		for (String s : stringArray) {
+			System.out.print(" " + s);
+		}
+		System.out.println("]");
+
 	}
 
 	public String getName() {
@@ -48,21 +71,39 @@ public class PropertiesCustom {
 		this.address = address;
 	}
 
+	public String[] getStringArray() {
+		return stringArray;
+	}
+
+	public void setStringArray(String[] stringArray) {
+		this.stringArray = stringArray;
+	}
+
 	public void saveParamChanges() {
 		try {
-			System.out.println("Editando fichero de propiedades");
-			Properties props = new Properties();
-			props.setProperty("custom.name", name);
-			props.setProperty("custom.lastname", lastName);
-			props.setProperty("custom.address", address);
 
-			URL url = Thread.currentThread().getContextClassLoader().getResource("custom.properties");
+			Class<?> pc = PropertiesCustom.class;
+			PropertySource ps = pc.getDeclaredAnnotation(PropertySource.class);
+			String[] propertyFiles = ps.value();
 
-			File f = new File(url.toURI().getPath());
+			Resource propertyResource = context.getResource(propertyFiles[0]);
+			System.out.println("Editando fichero de propiedades " + propertyFiles[0]);
+			
+			PropertiesConfiguration props = new PropertiesConfiguration(propertyResource.getFile());
+			Field[] flds = pc.getDeclaredFields();
+			for (Field f : flds) {
+				Value[] valueAnnotations = f.getDeclaredAnnotationsByType(Value.class);
+				if (valueAnnotations != null && valueAnnotations.length >= 1) {
+					String valueAnnotation = valueAnnotations[0].value();
+					//PRE: El valor debe seguir el formato "${nombre.de.la.propiedad}"
+					String propertyName = (String) valueAnnotation.substring(2, valueAnnotation.length() - 1);
+					System.out.println(propertyName + " ==> " + f.get(this));
+					props.setProperty(propertyName, f.get(this));
+				}
+			}
+			props.save();
 
-			OutputStream out = new FileOutputStream(f);
-			props.store(out, "Edited");
-			System.out.println("Fichero de propiedades editado");
+			System.out.println("Fichero de propiedades editado " + propertyFiles[0]);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
