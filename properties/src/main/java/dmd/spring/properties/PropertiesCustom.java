@@ -1,8 +1,6 @@
 package dmd.spring.properties;
 
-import java.io.File;
 import java.lang.reflect.Field;
-import java.net.URL;
 
 import javax.annotation.PostConstruct;
 
@@ -14,6 +12,13 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.core.io.Resource;
 
+/**
+ * Esta clase está configurada para recuperar ciertas propiedades de un fichero ".properties" y almacenarlas en variables de Java. Una vez almacenadas, permite editar las variables y guardarlas de nuevo en el fichero. El fichero se modificará
+ * cambiando los valores de las variables, pero manteniendo el resto de propiedades que no hayan sido configuradas.
+ * 
+ * @author David Márquez Delgado
+ *
+ */
 @Configuration
 @PropertySource("classpath:custom.properties")
 public class PropertiesCustom {
@@ -79,31 +84,49 @@ public class PropertiesCustom {
 		this.stringArray = stringArray;
 	}
 
+	/**
+	 * <b>Descripción</b><br/>
+	 * Permite modificar las propiedades enlazadas a las variables de esta clase.<br/>
+	 * - Se modificará el fichero informado en la anotación <code>PropertySource</code><br/>
+	 * - Se modificarán todas las propiedades con la anotación <code>Value</code><br/>
+	 * <br/>
+	 * PRECONDICIÓN: en la anotación <code>Value</code> se presupone que el valor sólo incluye el nombre de la propiedad y lo hace siguiendo el formato: <code>"${nombre.de.la.propiedad}"</code><br/>
+	 * Por otra parte <code>PropertySource</code> está informado con un sólo fichero.
+	 */
 	public void saveParamChanges() {
 		try {
 
-			Class<?> pc = PropertiesCustom.class;
-			PropertySource ps = pc.getDeclaredAnnotation(PropertySource.class);
-			String[] propertyFiles = ps.value();
+			// PRE: PropertySource está informado con un sólo fichero.
+			// Recuperar propiedades actuales del fichero de propiedades
+			Class<?> claseDePropiedades = PropertiesCustom.class;
+			PropertySource anotacionFuenteDePropiedades = claseDePropiedades.getDeclaredAnnotation(PropertySource.class);
+			String[] ficherosDePropiedadesDeclarados = anotacionFuenteDePropiedades.value();
+			Resource ficheroDePropiedadesDeclarado = context.getResource(ficherosDePropiedadesDeclarados[0]);
+			PropertiesConfiguration propiedadesParaModificar = new PropertiesConfiguration(ficheroDePropiedadesDeclarado.getFile());
 
-			Resource propertyResource = context.getResource(propertyFiles[0]);
-			System.out.println("Editando fichero de propiedades " + propertyFiles[0]);
-			
-			PropertiesConfiguration props = new PropertiesConfiguration(propertyResource.getFile());
-			Field[] flds = pc.getDeclaredFields();
-			for (Field f : flds) {
-				Value[] valueAnnotations = f.getDeclaredAnnotationsByType(Value.class);
-				if (valueAnnotations != null && valueAnnotations.length >= 1) {
-					String valueAnnotation = valueAnnotations[0].value();
-					//PRE: El valor debe seguir el formato "${nombre.de.la.propiedad}"
-					String propertyName = (String) valueAnnotation.substring(2, valueAnnotation.length() - 1);
-					System.out.println(propertyName + " ==> " + f.get(this));
-					props.setProperty(propertyName, f.get(this));
+			System.out.println("Editando fichero de propiedades " + ficherosDePropiedadesDeclarados[0]);
+
+			// Modificar la variable de propiedades, sustituyendo los valores actuales con los valores almacenados en la clase.
+			Field[] camposDeLaClasePropiedades = claseDePropiedades.getDeclaredFields();
+			for (Field campoActual : camposDeLaClasePropiedades) {
+
+				Value[] anotacionConNombreDeLaPropiedad = campoActual.getDeclaredAnnotationsByType(Value.class);
+
+				if (anotacionConNombreDeLaPropiedad != null && anotacionConNombreDeLaPropiedad.length >= 1) {
+
+					// PRE: El valor debe seguir el formato "${nombre.de.la.propiedad}"
+					String nombreDeLaPropiedadConLlaves = anotacionConNombreDeLaPropiedad[0].value();
+					String nombreDeLaPropiedad = (String) nombreDeLaPropiedadConLlaves.substring(2, nombreDeLaPropiedadConLlaves.length() - 1);
+					propiedadesParaModificar.setProperty(nombreDeLaPropiedad, campoActual.get(this));
+
+					System.out.println(nombreDeLaPropiedad + " ==> " + campoActual.get(this));
 				}
 			}
-			props.save();
 
-			System.out.println("Fichero de propiedades editado " + propertyFiles[0]);
+			// Guardar los cambios en el fichero
+			propiedadesParaModificar.save();
+
+			System.out.println("Fichero de propiedades editado " + ficherosDePropiedadesDeclarados[0]);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}

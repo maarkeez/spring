@@ -5,7 +5,7 @@
 
 	<groupId>dmd.spring.properties</groupId>
 	<artifactId>spring-properties</artifactId>
-	<version>0.0.1</version>
+	<version>1.0.0</version>
 	<name>SpringProperties</name>
 
 	<properties>
